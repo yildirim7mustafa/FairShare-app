@@ -1,3 +1,4 @@
+extern crate core;
 
 use rocket::{launch, routes};
 use rocket_db_pools::Database;

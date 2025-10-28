@@ -1,15 +1,10 @@
-
 use mongodb::bson::doc;
 use rocket::{get, post};
 use rocket::http::Status;
 use rocket::response::status;
 use rocket_db_pools::{Connection};
 use rocket::serde::json::{json, Json, Value};
-
 use mongodb::bson::oid::ObjectId;
-
-
-
 use crate::db::MainDatabase;
 use crate::models::{Member, Organization};
 
