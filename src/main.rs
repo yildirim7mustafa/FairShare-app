@@ -15,7 +15,8 @@ fn rocket() -> _ {
             routes::index,
             routes::add_organization,
             routes::add_member,
-            routes::add_expense
+            routes::add_expense,
+            routes::delete_expense
         ],
     )
 }

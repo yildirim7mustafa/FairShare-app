@@ -1,11 +1,12 @@
-use mongodb::bson::doc;
-use rocket::{get, post};
-use rocket::http::Status;
-use rocket::response::status;
-use rocket_db_pools::{Connection};
-use rocket::serde::json::{json, Json, Value};
 use crate::db::MainDatabase;
 use crate::models::{Expense, Member, Organization};
+use mongodb::bson::doc;
+use mongodb::bson::oid::ObjectId;
+use rocket::http::Status;
+use rocket::response::status;
+use rocket::serde::json::{Json, Value, json};
+use rocket::{delete, get, post};
+use rocket_db_pools::Connection;
 
 #[get("/")]
 pub fn index() -> Json<Value> {
@@ -26,7 +27,9 @@ pub async fn add_organization(
         if let Some(id) = res.inserted_id.as_object_id() {
             return status::Custom(
                 Status::Created,
-                Json(json!({"status": "success", "message": format!("Organization ({}) created successfully", id.to_string())})),
+                Json(
+                    json!({"status": "success", "message": format!("Organization ({}) created successfully", id.to_string())}),
+                ),
             );
         }
     }
@@ -34,7 +37,6 @@ pub async fn add_organization(
         Status::BadRequest,
         Json(json!({"status": "error", "message":"Organization could not be created"})),
     )
-
 }
 
 //add member
@@ -49,9 +51,7 @@ pub async fn add_member(
     let org_coll = db
         .database("hesapla")
         .collection::<Organization>("organizations");
-    let member_coll = db
-        .database("hesapla")
-        .collection::<Member>("members");
+    let member_coll = db.database("hesapla").collection::<Member>("members");
 
     // 1. Organization var mı?
     let org_result = org_coll.find_one(doc! { "_id": &org_oid }, None).await;
@@ -97,7 +97,6 @@ pub async fn add_member(
     )
 }
 
-
 #[post("/add_expense", data = "<data>", format = "json")]
 pub async fn add_expense(
     db: Connection<MainDatabase>,
@@ -111,15 +110,16 @@ pub async fn add_expense(
     let org_coll = db
         .database("hesapla")
         .collection::<Organization>("organizations");
-    let member_coll = db
-        .database("hesapla")
-        .collection::<Member>("members");
-    let expense_coll = db
-        .database("hesapla")
-        .collection::<Expense>("expenses");
+    let member_coll = db.database("hesapla").collection::<Member>("members");
+    let expense_coll = db.database("hesapla").collection::<Expense>("expenses");
 
     // 1. Organizasyon var mı?
-    if org_coll.find_one(doc! { "_id": &org_oid }, None).await.unwrap_or(None).is_none() {
+    if org_coll
+        .find_one(doc! { "_id": &org_oid }, None)
+        .await
+        .unwrap_or(None)
+        .is_none()
+    {
         return status::Custom(
             Status::NotFound,
             Json(json!({
@@ -130,7 +130,12 @@ pub async fn add_expense(
     }
 
     // 2. paid_by üyesi var mı?
-    if member_coll.find_one(doc! { "_id": &member_oid }, None).await.unwrap_or(None).is_none() {
+    if member_coll
+        .find_one(doc! { "_id": &member_oid }, None)
+        .await
+        .unwrap_or(None)
+        .is_none()
+    {
         return status::Custom(
             Status::NotFound,
             Json(json!({
@@ -142,7 +147,12 @@ pub async fn add_expense(
 
     // 3. split_between üyeleri var mı?
     for member_id in &expense.split_between {
-        if member_coll.find_one(doc! { "_id": member_id }, None).await.unwrap_or(None).is_none() {
+        if member_coll
+            .find_one(doc! { "_id": member_id }, None)
+            .await
+            .unwrap_or(None)
+            .is_none()
+        {
             return status::Custom(
                 Status::NotFound,
                 Json(json!({
@@ -172,3 +182,46 @@ pub async fn add_expense(
     }
 }
 
+#[delete("/delete_expense/<expense_id>")]
+pub async fn delete_expense(
+    db: Connection<MainDatabase>,
+    expense_id: &str,
+) -> status::Custom<Json<Value>> {
+    let obj_id = match ObjectId::parse_str(expense_id) {
+        Ok(oid) => oid,
+        Err(_) => {
+            return status::Custom(
+                Status::BadRequest,
+                Json(json!({
+                    "status": "error",
+                    "message": "Invalid expense_id format"
+                })),
+            );
+        }
+    };
+
+    let expense_coll = db.database("hesapla").collection::<Expense>("expenses");
+
+    match expense_coll.delete_one(doc! { "_id": obj_id }, None).await {
+        Ok(res) if res.deleted_count == 1 => status::Custom(
+            Status::Ok,
+            Json(json!({
+                "status": "success",
+                "message": "Expense deleted successfully"
+            })),
+        ),
+        Ok(_) => status::Custom(
+            Status::NotFound,
+            Json(json!({
+                "status": "error",
+                "message": "Expense not found"
+            })),
+        ),
+        Err(err) => status::Custom(
+            Status::InternalServerError,
+            Json(json!({
+                "message": format!("Database delete error: {}", err)
+            })),
+        ),
+    }
+}
